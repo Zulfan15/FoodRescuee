@@ -27,7 +27,7 @@
                     
                     @if($user->role === 'donor')
                         <li class="nav-item">
-                            <a class="nav-link" href="/direct-donations-create">
+                            <a class="nav-link" href="{{ route('donations.create') }}">
                                 <i class="fas fa-plus me-2"></i>New Donation
                             </a>
                         </li>

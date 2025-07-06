@@ -26,6 +26,40 @@ Route::get('/', function () {
     return view('home', compact('stats', 'recent_donations'));
 })->name('home');
 
+// Additional pages
+Route::get('/how-it-works', function () {
+    return view('how-it-works');
+})->name('how-it-works');
+
+Route::get('/impact', function () {
+    $impact_stats = [
+        'total_donations' => \App\Models\FoodDonation::count(),
+        'food_saved_kg' => \App\Models\FoodDonation::where('status', 'completed')->sum('quantity'),
+        'people_helped' => \App\Models\DonationRequest::where('status', 'completed')->count(),
+        'co2_saved' => \App\Models\FoodDonation::where('status', 'completed')->sum('quantity') * 2.5, // estimate
+        'money_saved' => \App\Models\FoodDonation::where('status', 'completed')->sum('quantity') * 15000, // IDR per kg
+    ];
+    return view('impact', compact('impact_stats'));
+})->name('impact');
+
+Route::get('/success-stories', function () {
+    return view('success-stories');
+})->name('success-stories');
+
+Route::get('/about', function () {
+    return view('about');
+})->name('about');
+
+Route::get('/emergency', function () {
+    $emergency_donations = \App\Models\FoodDonation::with('donor')
+        ->where('status', 'approved')
+        ->where('expiry_date', '>', now())
+        ->where('expiry_date', '<=', now()->addHours(24)) // Expiring within 24 hours
+        ->latest()
+        ->get();
+    return view('emergency', compact('emergency_donations'));
+})->name('emergency');
+
 // Authentication Routes
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login']);
@@ -76,62 +110,8 @@ Route::middleware('auth')->prefix('api')->group(function () {
     Route::get('/donations/nearby', [FoodDonationController::class, 'nearby']);
     Route::get('/user/location', function () {
         return response()->json([
-            'latitude' => auth()->user()->latitude,
-            'longitude' => auth()->user()->longitude,
+            'latitude' => Auth::user()->latitude,
+            'longitude' => Auth::user()->longitude,
         ]);
     });
-});
-
-// Temporary debug route
-Route::get('/test-donation-create', function () {
-    if (!Auth::check()) {
-        return 'Not authenticated';
-    }
-    
-    $user = Auth::user();
-    $hasRole = in_array($user->role, ['donor', 'admin']);
-    
-    return response()->json([
-        'authenticated' => true,
-        'user_id' => $user->id,
-        'user_email' => $user->email,
-        'user_role' => $user->role,
-        'has_required_role' => $hasRole,
-        'required_roles' => ['donor', 'admin'],
-        'route_exists' => Route::has('donations.create'),
-        'current_time' => now()
-    ]);
-})->middleware('web');
-
-// Simple test route without any middleware
-Route::get('/simple-test', function () {
-    return 'Simple test works!';
-});
-
-// Test route with auth only
-Route::get('/auth-test', function () {
-    if (!Auth::check()) {
-        return 'Not authenticated';
-    }
-    return 'Authenticated as: ' . Auth::user()->email . ' (Role: ' . Auth::user()->role . ')';
-})->middleware('auth');
-
-// Direct test route for donations create without middleware
-Route::get('/direct-donations-create', function () {
-    try {
-        $controller = new App\Http\Controllers\FoodDonationController();
-        return $controller->create();
-    } catch (Exception $e) {
-        return 'Error: ' . $e->getMessage();
-    }
-});
-
-// Direct test route for donations store without middleware
-Route::post('/direct-donations-store', function (Illuminate\Http\Request $request) {
-    try {
-        $controller = new App\Http\Controllers\FoodDonationController();
-        return $controller->store($request);
-    } catch (Exception $e) {
-        return 'Error: ' . $e->getMessage();
-    }
 });
