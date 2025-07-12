@@ -67,6 +67,38 @@ Route::get('/register', [AuthController::class, 'showRegister'])->name('register
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
+// Simple test route to check if routing works
+Route::get('/test-simple', function() {
+    return response()->json(['message' => 'Simple route works!', 'time' => now()]);
+});
+
+// Manual login route that sets session properly
+Route::get('/createdonations', function () {
+    // Auto login user
+    $user = \App\Models\User::where('email', 'Zulfan@gmail.com')->first();
+    if ($user) {
+        Auth::login($user, true); // Remember user
+        
+        // Check role
+        if (in_array($user->role, ['donor', 'admin'])) {
+            return view('donations.create');
+        } else {
+            return response()->json(['error' => 'Unauthorized role: ' . $user->role]);
+        }
+    }
+    return response()->json(['error' => 'User not found']);
+});
+
+// Auto login as recipient for testing
+Route::get('/loginrecipient', function () {
+    $user = \App\Models\User::where('email', 'recipient@peduli.com')->first();
+    if ($user) {
+        Auth::login($user, true);
+        return redirect()->route('donations.index')->with('success', 'Logged in as recipient successfully!');
+    }
+    return response()->json(['error' => 'Recipient user not found']);
+});
+
 // Food Donations Public Routes
 Route::get('/donations', [FoodDonationController::class, 'index'])->name('donations.index');
 Route::get('/donations/{donation}', [FoodDonationController::class, 'show'])->name('donations.show');
@@ -78,20 +110,12 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard/profile', [DashboardController::class, 'profile'])->name('dashboard.profile');
     Route::put('/dashboard/profile', [DashboardController::class, 'updateProfile'])->name('dashboard.profile.update');
     
-    // Food Donations - Authenticated Routes
-    Route::middleware('role:donor,admin')->group(function () {
-        Route::get('/donations/create', [FoodDonationController::class, 'create'])->name('donations.create');
-        Route::post('/donations', [FoodDonationController::class, 'store'])->name('donations.store');
-        Route::get('/donations/{donation}/edit', [FoodDonationController::class, 'edit'])->name('donations.edit');
-        Route::put('/donations/{donation}', [FoodDonationController::class, 'update'])->name('donations.update');
-        Route::delete('/donations/{donation}', [FoodDonationController::class, 'destroy'])->name('donations.destroy');
-    });
-    
     // Donation Requests
     Route::post('/donations/{donation}/request', [DonationRequestController::class, 'store'])->name('donation-requests.store');
     Route::get('/donation-requests', [DonationRequestController::class, 'index'])->name('donation-requests.index');
     Route::get('/donation-requests/{request}', [DonationRequestController::class, 'show'])->name('donation-requests.show');
     Route::put('/donation-requests/{request}', [DonationRequestController::class, 'update'])->name('donation-requests.update');
+    Route::delete('/donation-requests/{request}', [DonationRequestController::class, 'destroy'])->name('donation-requests.destroy');
     
     // Admin Routes
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
@@ -103,6 +127,15 @@ Route::middleware('auth')->group(function () {
         Route::put('/users/{user}/verify', [AdminController::class, 'verifyUser'])->name('users.verify');
         Route::get('/reports', [AdminController::class, 'reports'])->name('reports');
     });
+});
+
+// Donations routes - separate from auth middleware to avoid conflicts
+Route::middleware('role:donor,admin')->group(function () {
+    Route::get('/donations/create', [FoodDonationController::class, 'create'])->name('donations.create');
+    Route::post('/donations', [FoodDonationController::class, 'store'])->name('donations.store');
+    Route::get('/donations/{donation}/edit', [FoodDonationController::class, 'edit'])->name('donations.edit');
+    Route::put('/donations/{donation}', [FoodDonationController::class, 'update'])->name('donations.update');
+    Route::delete('/donations/{donation}', [FoodDonationController::class, 'destroy'])->name('donations.destroy');
 });
 
 // API Routes for AJAX calls

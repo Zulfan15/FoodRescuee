@@ -100,6 +100,26 @@ class FoodDonation extends Model
         return $this->quantity - $claimed;
     }
 
+    public function canBeRequested()
+    {
+        // Check if donation is approved and not expired
+        if ($this->status !== 'approved' || $this->isExpired()) {
+            return false;
+        }
+
+        // Check if there's still remaining quantity
+        if ($this->getRemainingQuantity() <= 0) {
+            return false;
+        }
+
+        // Check if pickup time window is still open
+        if (now() > $this->pickup_time_end) {
+            return false;
+        }
+
+        return true;
+    }
+
     public function getStatusColor()
     {
         return match($this->status) {

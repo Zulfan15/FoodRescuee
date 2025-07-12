@@ -20,7 +20,7 @@
                         </a>
                     @else
                         @if(Auth::user()->role === 'donor')
-                            <a href="/direct-donations-create" class="btn btn-light btn-lg">
+                            <a href="/createdonations" class="btn btn-light btn-lg">
                                 <i class="fas fa-plus me-2"></i>Donate Food
                             </a>
                         @endif
@@ -188,7 +188,7 @@
             </a>
         @else
             @if(Auth::user()->role === 'donor')
-                <a href="/direct-donations-create" class="btn btn-light btn-lg">
+                <a href="/createdonations" class="btn btn-light btn-lg">
                     <i class="fas fa-plus me-2"></i>Post Your First Donation
                 </a>
             @else

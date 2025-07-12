@@ -58,4 +58,15 @@ class DonationRequest extends Model
     {
         return $this->status === 'completed';
     }
+
+    public function getStatusColor()
+    {
+        return match($this->status) {
+            'pending' => 'warning',
+            'approved' => 'success',
+            'rejected' => 'danger',
+            'completed' => 'info',
+            default => 'secondary',
+        };
+    }
 }

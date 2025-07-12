@@ -14,7 +14,7 @@
                 </div>
                 @auth
                     @if(Auth::user()->role === 'donor')
-                        <a href="/direct-donations-create" class="btn btn-primary">
+                        <a href="/createdonations" class="btn btn-primary">
                             <i class="fas fa-plus me-2"></i>Add Donation
                         </a>
                     @endif
@@ -236,7 +236,7 @@
                         <p class="text-muted">There are no available food donations matching your criteria.</p>
                         @auth
                             @if(Auth::user()->role === 'donor')
-                                <a href="/direct-donations-create" class="btn btn-primary">
+                                <a href="/createdonations" class="btn btn-primary">
                                     <i class="fas fa-plus me-2"></i>Post First Donation
                                 </a>
                             @endif

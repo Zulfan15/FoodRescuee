@@ -81,7 +81,7 @@
                                 Request #{{ $request->id }} • {{ $request->created_at->format('M d, Y H:i') }}
                             </small>
                         </div>
-                        <span class="badge bg-{{ $this->getStatusColor($request->status) }}">
+                        <span class="badge bg-{{ $request->getStatusColor() }}">
                             {{ ucfirst($request->status) }}
                         </span>
                     </div>
@@ -376,16 +376,3 @@ function getStatusColor(status) {
 }
 </script>
 @endpush
-
-@php
-    // Helper function for status colors
-    function getStatusColor($status) {
-        return match($status) {
-            'pending' => 'warning',
-            'approved' => 'success',
-            'rejected' => 'danger',
-            'completed' => 'info',
-            default => 'secondary',
-        };
-    }
-@endphp

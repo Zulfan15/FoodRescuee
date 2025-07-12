@@ -18,7 +18,7 @@
                         Your donation will be reviewed by our admin team before being published.
                     </p>
 
-                    <form method="POST" action="/direct-donations-store" enctype="multipart/form-data" id="donationForm">
+                    <form method="POST" action="{{ route('donations.store') }}" enctype="multipart/form-data" id="donationForm">
                         @csrf
                         
                         <!-- Basic Information -->

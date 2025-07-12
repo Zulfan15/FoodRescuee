@@ -576,7 +576,7 @@
                     @auth
                         @if(auth()->user()->role === 'donor')
                         <li class="nav-item">
-                            <a class="nav-link" href="{{ url('/direct-donations-create') }}"
+                            <a class="nav-link" href="{{ url('/createdonations') }}"
                                style="color: #212529 !important; font-weight: 500; padding: 0.75rem 1rem !important;">
                                 <i class="fas fa-plus-circle me-1 text-success"></i>
                                 <span class="text-success fw-semibold">Donate Food</span>
