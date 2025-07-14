@@ -58,6 +58,48 @@
     #currentLocationBtn:disabled {
         opacity: 0.6;
     }
+    
+    /* Enhanced styles for nearby donations */
+    .food-card {
+        transition: all 0.3s ease;
+    }
+    
+    .food-card.nearby {
+        border: 2px solid #28a745 !important;
+        box-shadow: 0 4px 12px rgba(40, 167, 69, 0.2) !important;
+        transform: translateY(-2px);
+    }
+    
+    .food-card.distant {
+        opacity: 0.6;
+        transform: none;
+    }
+    
+    .distance-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        border-radius: 15px !important;
+        padding: 0.25rem 0.5rem !important;
+    }
+    
+    /* Custom marker styles */
+    .custom-div-icon {
+        background: transparent !important;
+        border: none !important;
+    }
+    
+    /* Radius circle info */
+    .radius-info {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 123, 255, 0.9);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.8rem;
+        z-index: 1000;
+    }
 </style>
 @endpush
 
@@ -145,6 +187,11 @@
                     <div class="d-flex justify-content-between align-items-center">
                         <h5 class="mb-0">
                             <i class="fas fa-map-marker-alt me-2"></i>Food Donations Map
+                            <small class="text-muted">
+                                <span id="radiusInfo" style="display: none;">
+                                    <i class="fas fa-circle-dot me-1"></i>5km radius
+                                </span>
+                            </small>
                         </h5>
                         <button id="currentLocationBtn" class="btn btn-outline-primary btn-sm" onclick="getCurrentLocation()">
                             <i class="fas fa-location-arrow me-1"></i>My Location
@@ -379,6 +426,9 @@
 let map;
 let mapVisible = false;
 let currentLocationMarker = null;
+let radiusCircle = null;
+let userLocation = null;
+const RADIUS_KM = 5;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize empty map
@@ -398,10 +448,14 @@ function getCurrentLocation() {
             function(position) {
                 const lat = position.coords.latitude;
                 const lng = position.coords.longitude;
+                userLocation = { lat, lng };
                 
-                // Remove existing current location marker
+                // Remove existing markers and circle
                 if (currentLocationMarker) {
                     map.removeLayer(currentLocationMarker);
+                }
+                if (radiusCircle) {
+                    map.removeLayer(radiusCircle);
                 }
                 
                 // Add current location marker with custom blue icon
@@ -414,16 +468,36 @@ function getCurrentLocation() {
                     })
                 }).addTo(map);
                 
+                // Add 5km radius circle
+                radiusCircle = L.circle([lat, lng], {
+                    color: '#007bff',
+                    fillColor: '#007bff',
+                    fillOpacity: 0.1,
+                    radius: RADIUS_KM * 1000, // Convert to meters
+                    weight: 2,
+                    dashArray: '5, 5'
+                }).addTo(map);
+                
                 // Add popup to current location marker
                 currentLocationMarker.bindPopup(`
                     <div class="text-center">
                         <strong><i class="fas fa-map-marker-alt text-primary me-1"></i>Your Current Location</strong><br>
+                        <small class="text-muted">Showing donations within ${RADIUS_KM}km radius</small><br>
                         <small class="text-muted">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</small>
                     </div>
                 `);
                 
-                // Center map on current location
-                map.setView([lat, lng], 15);
+                // Center map on current location with appropriate zoom
+                map.setView([lat, lng], 13);
+                
+                // Show radius info
+                document.getElementById('radiusInfo').style.display = 'inline';
+                
+                // Filter and highlight donations within radius
+                filterDonationsInRadius();
+                
+                // Update donations list with distance info
+                updateDonationsWithDistance();
                 
                 // Restore button state
                 btn.innerHTML = '<i class="fas fa-check me-1"></i>Located!';
@@ -433,8 +507,9 @@ function getCurrentLocation() {
                     btn.disabled = false;
                 }, 2000);
                 
-                // Show success message
-                showToast('Location found successfully!', 'success');
+                // Show success message with count
+                const nearbyCount = countDonationsInRadius();
+                showToast(`Location found! Found ${nearbyCount} donations within ${RADIUS_KM}km radius.`, 'success');
             },
             function(error) {
                 console.error('Error getting location:', error);
@@ -469,6 +544,146 @@ function getCurrentLocation() {
         btn.disabled = false;
         showToast('Geolocation is not supported by this browser.', 'error');
     }
+}
+
+// Calculate distance between two coordinates using Haversine formula
+function calculateDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Radius of the Earth in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+        Math.sin(dLat/2) * Math.sin(dLat/2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+        Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const distance = R * c; // Distance in kilometers
+    return distance;
+}
+
+// Check if donation is within radius
+function isDonationInRadius(donationLat, donationLng) {
+    if (!userLocation) return false;
+    const distance = calculateDistance(userLocation.lat, userLocation.lng, donationLat, donationLng);
+    return distance <= RADIUS_KM;
+}
+
+// Count donations within radius
+function countDonationsInRadius() {
+    if (!userLocation) return 0;
+    let count = 0;
+    
+    @foreach($donations as $donation)
+        @if($donation->pickup_latitude && $donation->pickup_longitude)
+            if (isDonationInRadius({{ $donation->pickup_latitude }}, {{ $donation->pickup_longitude }})) {
+                count++;
+            }
+        @endif
+    @endforeach
+    
+    return count;
+}
+
+// Filter and highlight donations within radius on map
+function filterDonationsInRadius() {
+    if (!userLocation) return;
+    
+    // Clear existing markers first (except current location and radius circle)
+    map.eachLayer(function(layer) {
+        if (layer instanceof L.Marker && layer !== currentLocationMarker) {
+            map.removeLayer(layer);
+        }
+    });
+    
+    // Add markers only for donations within radius
+    @foreach($donations as $donation)
+        @if($donation->pickup_latitude && $donation->pickup_longitude)
+            const donationLat = {{ $donation->pickup_latitude }};
+            const donationLng = {{ $donation->pickup_longitude }};
+            const distance = calculateDistance(userLocation.lat, userLocation.lng, donationLat, donationLng);
+            
+            if (distance <= RADIUS_KM) {
+                // Create marker with different color for nearby donations
+                const markerIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div style="background-color: #28a745; width: 25px; height: 25px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; align-items: center; justify-content: center;">
+                             <i class="fas fa-utensils" style="color: white; font-size: 10px;"></i>
+                           </div>`,
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12]
+                });
+                
+                L.marker([donationLat, donationLng], { icon: markerIcon })
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <h6>{{ $donation->title }}</h6>
+                            <p class="mb-1"><strong>{{ $donation->quantity }} {{ $donation->unit }}</strong> ({{ $donation->getRemainingQuantity() }} available)</p>
+                            <p class="mb-1"><small><i class="fas fa-map-marker-alt text-success me-1"></i>${distance.toFixed(2)} km away</small></p>
+                            <p class="mb-1"><small>{{ $donation->pickup_location }}</small></p>
+                            <p class="mb-1"><small>By: {{ $donation->donor->name }}</small></p>
+                            <div class="d-flex gap-1 mt-2">
+                                <a href="{{ route('donations.show', $donation) }}" class="btn btn-sm btn-primary">View</a>
+                                @auth
+                                    @if(Auth::user()->role === 'recipient' && $donation->getRemainingQuantity() > 0)
+                                        <button class="btn btn-sm btn-success" onclick="showRequestModal({{ $donation->id }}, '{{ $donation->title }}', {{ $donation->getRemainingQuantity() }}, '{{ $donation->unit }}')">Request</button>
+                                    @endif
+                                @endauth
+                            </div>
+                        </div>
+                    `);
+            }
+        @endif
+    @endforeach
+}
+
+// Update donation cards with distance information
+function updateDonationsWithDistance() {
+    if (!userLocation) return;
+    
+    const donationCards = document.querySelectorAll('.food-card');
+    donationCards.forEach((card, index) => {
+        @foreach($donations as $index => $donation)
+            @if($donation->pickup_latitude && $donation->pickup_longitude)
+                if (index === {{ $loop->index }}) {
+                    const distance = calculateDistance(
+                        userLocation.lat, 
+                        userLocation.lng, 
+                        {{ $donation->pickup_latitude }}, 
+                        {{ $donation->pickup_longitude }}
+                    );
+                    
+                    // Add distance badge to card
+                    const existingBadge = card.querySelector('.distance-badge');
+                    if (existingBadge) {
+                        existingBadge.remove();
+                    }
+                    
+                    if (distance <= RADIUS_KM) {
+                        const distanceBadge = document.createElement('span');
+                        distanceBadge.className = 'badge bg-success distance-badge position-absolute';
+                        distanceBadge.style.cssText = 'top: 10px; left: 10px; z-index: 10;';
+                        distanceBadge.innerHTML = `<i class="fas fa-location-arrow me-1"></i>${distance.toFixed(1)} km`;
+                        
+                        const cardBody = card.querySelector('.position-relative') || card.querySelector('.card-img-top').parentNode;
+                        if (cardBody) {
+                            cardBody.style.position = 'relative';
+                            cardBody.appendChild(distanceBadge);
+                        }
+                        
+                        // Highlight the card
+                        card.classList.add('nearby');
+                        card.style.border = '2px solid #28a745';
+                        card.style.boxShadow = '0 4px 8px rgba(40, 167, 69, 0.2)';
+                    } else {
+                        // Dim the card if outside radius
+                        card.classList.add('distant');
+                        card.style.opacity = '0.6';
+                        card.style.border = '1px solid #dee2e6';
+                    }
+                }
+            @endif
+        @endforeach
+    });
 }
 
 function showToast(message, type = 'info') {
@@ -521,29 +736,34 @@ function initializeMap() {
 }
 
 function loadDonationsOnMap() {
-    // Add markers for each donation
-    @foreach($donations as $donation)
-        @if($donation->pickup_latitude && $donation->pickup_longitude)
-            L.marker([{{ $donation->pickup_latitude }}, {{ $donation->pickup_longitude }}])
-                .addTo(map)
-                .bindPopup(`
-                    <div class="popup-content">
-                        <h6>{{ $donation->title }}</h6>
-                        <p class="mb-1"><strong>{{ $donation->quantity }} {{ $donation->unit }}</strong> ({{ $donation->getRemainingQuantity() }} available)</p>
-                        <p class="mb-1"><small>{{ $donation->pickup_location }}</small></p>
-                        <p class="mb-1"><small>By: {{ $donation->donor->name }}</small></p>
-                        <div class="d-flex gap-1 mt-2">
-                            <a href="{{ route('donations.show', $donation) }}" class="btn btn-sm btn-primary">View</a>
-                            @auth
-                                @if(Auth::user()->role === 'recipient' && $donation->getRemainingQuantity() > 0)
-                                    <button class="btn btn-sm btn-success" onclick="showRequestModal({{ $donation->id }}, '{{ $donation->title }}', {{ $donation->getRemainingQuantity() }}, '{{ $donation->unit }}')">Request</button>
-                                @endif
-                            @endauth
+    // Add markers for each donation (this will be filtered by radius if user location is available)
+    if (userLocation) {
+        filterDonationsInRadius();
+    } else {
+        // Show all donations if no user location
+        @foreach($donations as $donation)
+            @if($donation->pickup_latitude && $donation->pickup_longitude)
+                L.marker([{{ $donation->pickup_latitude }}, {{ $donation->pickup_longitude }}])
+                    .addTo(map)
+                    .bindPopup(`
+                        <div class="popup-content">
+                            <h6>{{ $donation->title }}</h6>
+                            <p class="mb-1"><strong>{{ $donation->quantity }} {{ $donation->unit }}</strong> ({{ $donation->getRemainingQuantity() }} available)</p>
+                            <p class="mb-1"><small>{{ $donation->pickup_location }}</small></p>
+                            <p class="mb-1"><small>By: {{ $donation->donor->name }}</small></p>
+                            <div class="d-flex gap-1 mt-2">
+                                <a href="{{ route('donations.show', $donation) }}" class="btn btn-sm btn-primary">View</a>
+                                @auth
+                                    @if(Auth::user()->role === 'recipient' && $donation->getRemainingQuantity() > 0)
+                                        <button class="btn btn-sm btn-success" onclick="showRequestModal({{ $donation->id }}, '{{ $donation->title }}', {{ $donation->getRemainingQuantity() }}, '{{ $donation->unit }}')">Request</button>
+                                    @endif
+                                @endauth
+                            </div>
                         </div>
-                    </div>
-                `);
-        @endif
-    @endforeach
+                    `);
+            @endif
+        @endforeach
+    }
 }
 
 @auth
