@@ -159,7 +159,7 @@
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h2 class="fw-bold">Interactive Food Map</h2>
-                    <p class="text-muted">Discover available food donations near you within 5km radius</p>
+                    <p class="text-muted">Discover available food donations near you within 10km radius</p>
                 </div>
                 @auth
                     @if(Auth::user()->role === 'donor')
@@ -210,9 +210,24 @@
                                 <button type="submit" class="btn btn-primary me-2">
                                     <i class="fas fa-filter me-1"></i>Filter
                                 </button>
-                                <a href="{{ route('donations.index') }}" class="btn btn-outline-secondary">
+                                <a href="{{ route('donations.index') }}" class="btn btn-outline-secondary me-2">
                                     <i class="fas fa-times me-1"></i>Clear
                                 </a>
+                                @auth
+                                    @if(!request('show_all'))
+                                        <a href="{{ route('donations.index', array_merge(request()->all(), ['show_all' => '1'])) }}" 
+                                           class="btn btn-outline-warning btn-sm" 
+                                           title="Show all donations regardless of distance">
+                                            <i class="fas fa-globe me-1"></i>Show All
+                                        </a>
+                                    @else
+                                        <a href="{{ route('donations.index', request()->except('show_all')) }}" 
+                                           class="btn btn-outline-primary btn-sm"
+                                           title="Show only nearby donations">
+                                            <i class="fas fa-map-marker-alt me-1"></i>Nearby Only
+                                        </a>
+                                    @endif
+                                @endauth
                             </div>
                             
                             <div class="col-md-2 mb-3">
@@ -253,7 +268,7 @@
                             <i class="fas fa-map-marker-alt me-2"></i>Food Donations Map
                             <small class="text-muted">
                                 <span id="radiusInfo" style="display: none;">
-                                    <i class="fas fa-circle-dot me-1"></i>5km radius
+                                    <i class="fas fa-circle-dot me-1"></i>10km radius
                                 </span>
                             </small>
                         </h5>
@@ -263,6 +278,9 @@
                             </button>
                             <button class="btn btn-outline-success btn-sm" onclick="simulateNewDonation()" title="Test real-time feature">
                                 <i class="fas fa-plus me-1"></i>Test New
+                            </button>
+                            <button id="refreshMarkersBtn" class="btn btn-outline-info btn-sm" onclick="refreshMapMarkers()" title="Refresh all donation markers">
+                                <i class="fas fa-sync-alt me-1"></i>Refresh Markers
                             </button>
                         </div>
                     </div>
@@ -520,7 +538,7 @@ let currentLocationMarker = null;
 let radiusCircle = null;
 let userLocation = null;
 let donationMarkers = []; // Track all donation markers
-const RADIUS_KM = 5;
+const RADIUS_KM = 10;
 
 // Initialize real-time updates (simplified without Pusher for now)
 let realTimeEnabled = false;
@@ -1091,6 +1109,59 @@ function getCurrentLocation() {
         btn.innerHTML = originalContent;
         btn.disabled = false;
         showToast('Geolocation is not supported by this browser.', 'error');
+    }
+}
+
+function refreshMapMarkers() {
+    const btn = document.getElementById('refreshMarkersBtn');
+    const originalContent = btn.innerHTML;
+    
+    // Show loading state
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Refreshing...';
+    btn.disabled = true;
+    
+    try {
+        // Clear existing donation markers
+        donationMarkers.forEach(marker => {
+            if (map && map.hasLayer(marker)) {
+                map.removeLayer(marker);
+            }
+        });
+        donationMarkers = [];
+        
+        // Clear marker clusters if they exist
+        if (window.markerCluster && map.hasLayer(window.markerCluster)) {
+            map.removeLayer(window.markerCluster);
+        }
+        
+        console.log('🔄 Cleared existing markers, reloading...');
+        
+        // Reload all donations on the map
+        loadDonationsOnMap();
+        
+        // Update the donations list if there's a filter applied
+        if (userLocation) {
+            updateDonationsWithDistance();
+        }
+        
+        // Restore button state
+        btn.innerHTML = '<i class="fas fa-check me-1"></i>Refreshed!';
+        
+        setTimeout(() => {
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }, 2000);
+        
+        showToast('Map markers refreshed successfully!', 'success');
+        
+    } catch (error) {
+        console.error('Error refreshing markers:', error);
+        
+        // Restore button state
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+        
+        showToast('Failed to refresh markers. Please try again.', 'error');
     }
 }
 

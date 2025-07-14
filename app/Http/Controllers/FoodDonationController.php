@@ -27,15 +27,15 @@ class FoodDonationController extends Controller
             ->where('status', 'approved')
             ->where('expiry_date', '>', now());
 
-        // Filter by location if user is authenticated
-        if (Auth::check()) {
+        // Filter by location if user is authenticated (unless 'show_all' is requested)
+        if (Auth::check() && !$request->has('show_all')) {
             $user = Auth::user();
             if ($user->latitude && $user->longitude) {
                 $query->whereRaw(
                     "ST_Distance_Sphere(
                         POINT(pickup_longitude, pickup_latitude),
                         POINT(?, ?)
-                    ) <= 5000", // 5km radius
+                    ) <= 10000", // 10km radius
                     [$user->longitude, $user->latitude]
                 );
             }
