@@ -2,6 +2,65 @@
 
 @section('title', 'Food Map - FoodRescue')
 
+@push('styles')
+<style>
+    .current-location-marker {
+        background: none;
+        border: none;
+    }
+    
+    .current-location-icon {
+        position: relative;
+        width: 20px;
+        height: 20px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .current-location-icon i {
+        color: #007bff;
+        font-size: 12px;
+        position: relative;
+        z-index: 2;
+        text-shadow: 0 0 4px rgba(255, 255, 255, 0.8);
+    }
+    
+    .current-location-icon::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 16px;
+        height: 16px;
+        background: #007bff;
+        border-radius: 50%;
+        opacity: 0.3;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% {
+            transform: translate(-50%, -50%) scale(1);
+            opacity: 0.6;
+        }
+        70% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0;
+        }
+        100% {
+            transform: translate(-50%, -50%) scale(2);
+            opacity: 0;
+        }
+    }
+    
+    #currentLocationBtn:disabled {
+        opacity: 0.6;
+    }
+</style>
+@endpush
+
 @section('content')
 <div class="container-fluid py-4">
     <!-- Header Section -->
@@ -83,9 +142,14 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0">
-                        <i class="fas fa-map-marker-alt me-2"></i>Food Donations Map
-                    </h5>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">
+                            <i class="fas fa-map-marker-alt me-2"></i>Food Donations Map
+                        </h5>
+                        <button id="currentLocationBtn" class="btn btn-outline-primary btn-sm" onclick="getCurrentLocation()">
+                            <i class="fas fa-location-arrow me-1"></i>My Location
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body p-0">
                     <div id="donationsMap" style="height: 500px;"></div>
@@ -314,11 +378,119 @@
 <script>
 let map;
 let mapVisible = false;
+let currentLocationMarker = null;
 
 document.addEventListener('DOMContentLoaded', function() {
     // Initialize empty map
     initializeMap();
 });
+
+function getCurrentLocation() {
+    const btn = document.getElementById('currentLocationBtn');
+    const originalContent = btn.innerHTML;
+    
+    // Show loading state
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Finding...';
+    btn.disabled = true;
+    
+    if ("geolocation" in navigator) {
+        navigator.geolocation.getCurrentPosition(
+            function(position) {
+                const lat = position.coords.latitude;
+                const lng = position.coords.longitude;
+                
+                // Remove existing current location marker
+                if (currentLocationMarker) {
+                    map.removeLayer(currentLocationMarker);
+                }
+                
+                // Add current location marker with custom blue icon
+                currentLocationMarker = L.marker([lat, lng], {
+                    icon: L.divIcon({
+                        className: 'current-location-marker',
+                        html: '<div class="current-location-icon"><i class="fas fa-circle"></i></div>',
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    })
+                }).addTo(map);
+                
+                // Add popup to current location marker
+                currentLocationMarker.bindPopup(`
+                    <div class="text-center">
+                        <strong><i class="fas fa-map-marker-alt text-primary me-1"></i>Your Current Location</strong><br>
+                        <small class="text-muted">Lat: ${lat.toFixed(6)}, Lng: ${lng.toFixed(6)}</small>
+                    </div>
+                `);
+                
+                // Center map on current location
+                map.setView([lat, lng], 15);
+                
+                // Restore button state
+                btn.innerHTML = '<i class="fas fa-check me-1"></i>Located!';
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                }, 2000);
+                
+                // Show success message
+                showToast('Location found successfully!', 'success');
+            },
+            function(error) {
+                console.error('Error getting location:', error);
+                
+                // Restore button state
+                btn.innerHTML = originalContent;
+                btn.disabled = false;
+                
+                let errorMessage = 'Unable to get your location';
+                switch(error.code) {
+                    case error.PERMISSION_DENIED:
+                        errorMessage = 'Location access denied. Please enable location services.';
+                        break;
+                    case error.POSITION_UNAVAILABLE:
+                        errorMessage = 'Location information unavailable.';
+                        break;
+                    case error.TIMEOUT:
+                        errorMessage = 'Location request timed out.';
+                        break;
+                }
+                
+                showToast(errorMessage, 'error');
+            },
+            {
+                enableHighAccuracy: true,
+                timeout: 10000,
+                maximumAge: 60000
+            }
+        );
+    } else {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+        showToast('Geolocation is not supported by this browser.', 'error');
+    }
+}
+
+function showToast(message, type = 'info') {
+    // Create toast element
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'info'} alert-dismissible fade show position-fixed`;
+    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
+    toast.innerHTML = `
+        <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : type === 'success' ? 'check-circle' : 'info-circle'} me-2"></i>
+        ${message}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto remove after 5 seconds
+    setTimeout(() => {
+        if (toast.parentNode) {
+            toast.remove();
+        }
+    }, 5000);
+}
 
 function toggleMapView() {
     const mapSection = document.getElementById('mapSection');
