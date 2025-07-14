@@ -705,6 +705,16 @@
     <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     
+    <!-- Check Leaflet Loading -->
+    <script>
+        // Debug Leaflet loading
+        if (typeof L !== 'undefined') {
+            console.log('✅ Leaflet loaded successfully, version:', L.version);
+        } else {
+            console.error('❌ Leaflet failed to load');
+        }
+    </script>
+    
     <!-- Custom Navbar JavaScript -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {

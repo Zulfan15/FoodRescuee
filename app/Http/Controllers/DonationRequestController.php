@@ -91,6 +91,14 @@ class DonationRequestController extends Controller
     {
         $user = Auth::user();
         
+        // Load the foodDonation relationship
+        $request->load(['foodDonation.donor', 'recipient']);
+        
+        // Check if foodDonation exists
+        if (!$request->foodDonation) {
+            abort(404, 'Food donation not found.');
+        }
+        
         // Check authorization
         if ($user->role === 'recipient' && $request->recipient_id !== $user->id) {
             abort(403);
@@ -110,6 +118,14 @@ class DonationRequestController extends Controller
     {
         $user = Auth::user();
         
+        // Load the foodDonation relationship to avoid null errors
+        $donationRequest->load('foodDonation');
+        
+        // Check if foodDonation exists
+        if (!$donationRequest->foodDonation) {
+            return back()->with('error', 'Food donation not found.');
+        }
+        
         // Donors can approve/reject requests for their donations
         if ($user->role === 'donor' && $donationRequest->foodDonation->donor_id === $user->id) {
             $validated = $request->validate([
@@ -126,7 +142,7 @@ class DonationRequestController extends Controller
 
             $donationRequest->update([
                 'status' => $validated['status'],
-                'pickup_notes' => $validated['pickup_notes'],
+                'pickup_notes' => $validated['pickup_notes'] ?? null,
                 'approved_at' => $validated['status'] === 'approved' ? now() : null,
             ]);
 
@@ -170,6 +186,9 @@ class DonationRequestController extends Controller
     public function destroy(DonationRequest $donationRequest)
     {
         $user = Auth::user();
+        
+        // Load the foodDonation relationship if needed for authorization
+        $donationRequest->load('foodDonation');
         
         // Only recipient can cancel their own pending request
         if ($user->role === 'recipient' && 

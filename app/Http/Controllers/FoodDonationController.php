@@ -6,6 +6,9 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\FoodDonation;
 use App\Models\User;
+use App\Events\DonationCreated;
+use App\Events\DonationUpdated;
+use App\Events\DonationDeleted;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Http\RedirectResponse;
@@ -122,6 +125,11 @@ class FoodDonationController extends Controller
 
         $donation->save();
 
+        // Broadcast event for real-time updates if approved
+        if ($donation->status === 'approved') {
+            broadcast(new DonationCreated($donation));
+        }
+
         return redirect()->route('dashboard')
             ->with('success', 'Food donation posted successfully! It will be reviewed by admin before being published.');
     }
@@ -202,6 +210,11 @@ class FoodDonationController extends Controller
 
         $donation->save();
 
+        // Broadcast update if approved
+        if ($donation->status === 'approved') {
+            broadcast(new DonationUpdated($donation));
+        }
+
         return redirect()->route('donations.show', $donation)
             ->with('success', 'Donation updated successfully!');
     }
@@ -225,7 +238,11 @@ class FoodDonationController extends Controller
             }
         }
 
+        $donationId = $donation->id;
         $donation->delete();
+
+        // Broadcast deletion
+        broadcast(new DonationDeleted($donationId));
 
         return redirect()->route('dashboard')
             ->with('success', 'Donation deleted successfully!');

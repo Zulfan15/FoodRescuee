@@ -72,22 +72,22 @@ Route::get('/test-simple', function() {
     return response()->json(['message' => 'Simple route works!', 'time' => now()]);
 });
 
-// Manual login route that sets session properly
+// Create donations route with proper authentication
 Route::get('/createdonations', function () {
-    // Auto login user
-    $user = \App\Models\User::where('email', 'Zulfan@gmail.com')->first();
-    if ($user) {
-        Auth::login($user, true); // Remember user
-        
-        // Check role
-        if (in_array($user->role, ['donor', 'admin'])) {
-            return view('donations.create');
-        } else {
-            return response()->json(['error' => 'Unauthorized role: ' . $user->role]);
-        }
+    // Check if user is authenticated
+    if (!Auth::check()) {
+        return redirect()->route('login')->with('error', 'Please login first');
     }
-    return response()->json(['error' => 'User not found']);
-});
+    
+    $user = Auth::user();
+    
+    // Check role
+    if (in_array($user->role, ['donor', 'admin'])) {
+        return view('donations.create');
+    } else {
+        return redirect()->route('dashboard')->with('error', 'Only donors and admins can create donations');
+    }
+})->middleware('auth');
 
 // Auto login as recipient for testing
 Route::get('/loginrecipient', function () {

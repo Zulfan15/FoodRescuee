@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Map Debug Test</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        #testMap {
+            height: 400px;
+            width: 100%;
+            border: 2px solid #ccc;
+        }
+        .debug-info {
+            background: #f8f9fa;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #007bff;
+        }
+    </style>
+</head>
+<body>
+    <h1>Leaflet Map Debug Test</h1>
+    
+    <div class="debug-info">
+        <h3>Debug Information:</h3>
+        <div id="debugInfo"></div>
+    </div>
+    
+    <div>
+        <button onclick="initTestMap()">Initialize Map</button>
+        <button onclick="addTestMarker()">Add Test Marker</button>
+    </div>
+    
+    <div id="testMap"></div>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        let testMap;
+        
+        function updateDebugInfo() {
+            const info = document.getElementById('debugInfo');
+            info.innerHTML = `
+                <p><strong>Leaflet loaded:</strong> ${typeof L !== 'undefined' ? '✅ Yes' : '❌ No'}</p>
+                <p><strong>Leaflet version:</strong> ${typeof L !== 'undefined' ? L.version : 'N/A'}</p>
+                <p><strong>Map container exists:</strong> ${document.getElementById('testMap') ? '✅ Yes' : '❌ No'}</p>
+                <p><strong>Map initialized:</strong> ${testMap ? '✅ Yes' : '❌ No'}</p>
+            `;
+        }
+        
+        function initTestMap() {
+            try {
+                console.log('Initializing test map...');
+                
+                if (testMap) {
+                    testMap.remove();
+                }
+                
+                testMap = L.map('testMap').setView([-7.9666, 112.6326], 13);
+                
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '© OpenStreetMap contributors'
+                }).addTo(testMap);
+                
+                console.log('✅ Test map initialized successfully');
+                updateDebugInfo();
+                
+            } catch (error) {
+                console.error('❌ Error initializing test map:', error);
+                alert('Error: ' + error.message);
+            }
+        }
+        
+        function addTestMarker() {
+            if (!testMap) {
+                alert('Please initialize map first');
+                return;
+            }
+            
+            try {
+                L.marker([-7.9666, 112.6326])
+                    .addTo(testMap)
+                    .bindPopup('Test marker at Malang coordinates')
+                    .openPopup();
+                    
+                console.log('✅ Test marker added');
+            } catch (error) {
+                console.error('❌ Error adding marker:', error);
+                alert('Error adding marker: ' + error.message);
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded for debug test');
+            updateDebugInfo();
+        });
+    </script>
+</body>
+</html>
