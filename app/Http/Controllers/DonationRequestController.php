@@ -52,8 +52,8 @@ class DonationRequestController extends Controller
             return back()->with('error', 'Only recipients can request food donations.');
         }
 
-        // Check if donation is available
-        if (!$donation->canBeRequested()) {
+        // Check if donation is available and approved
+        if (!$donation->canBeRequested() || $donation->status !== 'approved') {
             return back()->with('error', 'This donation is no longer available for requests.');
         }
 
@@ -63,25 +63,31 @@ class DonationRequestController extends Controller
             'is_priority' => 'boolean',
         ]);
 
-        // Check if user already has pending request for this donation
+        // Check if user already has any active request for this donation
         $existingRequest = DonationRequest::where('food_donation_id', $donation->id)
             ->where('recipient_id', Auth::id())
-            ->where('status', 'pending')
+            ->whereIn('status', ['pending', 'approved'])
             ->first();
 
         if ($existingRequest) {
-            return back()->with('error', 'You already have a pending request for this donation.');
+            $status = $existingRequest->status === 'pending' ? 'pending' : 'already approved';
+            return back()->with('error', 'You already have a ' . $status . ' request for this donation.');
         }
 
-        $donationRequest = DonationRequest::create([
-            'food_donation_id' => $donation->id,
-            'recipient_id' => Auth::id(),
-            'requested_quantity' => $validated['requested_quantity'],
-            'message' => $validated['message'],
-            'is_priority' => $request->has('is_priority'),
-        ]);
+        try {
+            $donationRequest = DonationRequest::create([
+                'food_donation_id' => $donation->id,
+                'recipient_id' => Auth::id(),
+                'requested_quantity' => $validated['requested_quantity'],
+                'message' => $validated['message'],
+                'is_priority' => $request->has('is_priority'),
+                'status' => 'pending',
+            ]);
 
-        return back()->with('success', 'Your request has been sent to the donor successfully!');
+            return back()->with('success', 'Your request has been sent to the donor successfully!');
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to create request. Please try again.');
+        }
     }
 
     /**
@@ -133,21 +139,31 @@ class DonationRequestController extends Controller
                 'pickup_notes' => 'nullable|string|max:500',
             ]);
 
-            // Check if there's enough quantity available
+            // Check if request is still pending
+            if ($donationRequest->status !== 'pending') {
+                return back()->with('error', 'This request has already been processed.');
+            }
+
+            // Check if there's enough quantity available for approval
             if ($validated['status'] === 'approved') {
-                if ($donationRequest->requested_quantity > $donationRequest->foodDonation->getRemainingQuantity()) {
-                    return back()->with('error', 'Not enough quantity available for this request.');
+                $remainingQuantity = $donationRequest->foodDonation->getRemainingQuantity();
+                if ($donationRequest->requested_quantity > $remainingQuantity) {
+                    return back()->with('error', 'Not enough quantity available. Only ' . $remainingQuantity . ' ' . $donationRequest->foodDonation->unit . ' remaining.');
                 }
             }
 
-            $donationRequest->update([
-                'status' => $validated['status'],
-                'pickup_notes' => $validated['pickup_notes'] ?? null,
-                'approved_at' => $validated['status'] === 'approved' ? now() : null,
-            ]);
+            try {
+                $donationRequest->update([
+                    'status' => $validated['status'],
+                    'pickup_notes' => $validated['pickup_notes'] ?? null,
+                    'approved_at' => $validated['status'] === 'approved' ? now() : null,
+                ]);
 
-            $message = $validated['status'] === 'approved' ? 'Request approved successfully!' : 'Request rejected.';
-            return back()->with('success', $message);
+                $message = $validated['status'] === 'approved' ? 'Request approved successfully!' : 'Request rejected.';
+                return back()->with('success', $message);
+            } catch (\Exception $e) {
+                return back()->with('error', 'Failed to update request. Please try again.');
+            }
         }
         
         // Recipients can mark as picked up
@@ -160,24 +176,28 @@ class DonationRequestController extends Controller
                 return back()->with('error', 'Only approved requests can be marked as completed.');
             }
 
-            $donationRequest->update([
-                'status' => 'completed',
-                'picked_up_at' => now(),
-            ]);
+            try {
+                $donationRequest->update([
+                    'status' => 'completed',
+                    'picked_up_at' => now(),
+                ]);
 
-            // Check if all quantity has been picked up
-            $totalApprovedQuantity = $donationRequest->foodDonation->donationRequests()
-                ->where('status', 'approved')
-                ->sum('requested_quantity');
-            
-            if ($totalApprovedQuantity >= $donationRequest->foodDonation->quantity) {
-                $donationRequest->foodDonation->update(['status' => 'completed']);
+                // Check if donation should be marked as completed
+                $totalCompletedQuantity = $donationRequest->foodDonation->donationRequests()
+                    ->where('status', 'completed')
+                    ->sum('requested_quantity');
+                
+                if ($totalCompletedQuantity >= $donationRequest->foodDonation->quantity) {
+                    $donationRequest->foodDonation->update(['status' => 'completed']);
+                }
+
+                return back()->with('success', 'Thank you! Request marked as completed.');
+            } catch (\Exception $e) {
+                return back()->with('error', 'Failed to complete request. Please try again.');
             }
-
-            return back()->with('success', 'Thank you! Request marked as completed.');
         }
 
-        abort(403);
+        abort(403, 'Unauthorized action.');
     }
 
     /**
@@ -195,10 +215,14 @@ class DonationRequestController extends Controller
             $donationRequest->recipient_id === $user->id && 
             $donationRequest->status === 'pending') {
             
-            $donationRequest->delete();
-            return back()->with('success', 'Request cancelled successfully.');
+            try {
+                $donationRequest->delete();
+                return back()->with('success', 'Request cancelled successfully.');
+            } catch (\Exception $e) {
+                return back()->with('error', 'Failed to cancel request. Please try again.');
+            }
         }
 
-        abort(403);
+        abort(403, 'Unauthorized action.');
     }
 }

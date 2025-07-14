@@ -17,6 +17,33 @@
                         Update your food donation details. Make sure all information is accurate.
                     </p>
 
+                    <!-- Display success/error messages -->
+                    @if(session('success'))
+                        <div class="alert alert-success alert-dismissible fade show" role="alert">
+                            {{ session('success') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
+                    @if(session('error'))
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            {{ session('error') }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
+                    @if($errors->any())
+                        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                            <h6>Please fix the following errors:</h6>
+                            <ul class="mb-0">
+                                @foreach($errors->all() as $error)
+                                    <li>{{ $error }}</li>
+                                @endforeach
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    @endif
+
                     <form method="POST" action="{{ route('donations.update', $donation) }}" enctype="multipart/form-data" id="donationForm">
                         @csrf
                         @method('PUT')
@@ -370,6 +397,16 @@ document.addEventListener('DOMContentLoaded', function() {
             alert('You can only upload maximum 5 images');
             this.value = '';
         }
+    });
+
+    // Form submission debug
+    document.getElementById('donationForm').addEventListener('submit', function(e) {
+        console.log('Form being submitted...');
+        console.log('Form action:', this.action);
+        console.log('Form method:', this.method);
+        
+        // Let the form submit normally
+        return true;
     });
 });
 </script>

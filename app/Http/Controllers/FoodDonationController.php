@@ -11,6 +11,7 @@ use App\Events\DonationUpdated;
 use App\Events\DonationDeleted;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 use Illuminate\Http\JsonResponse;
@@ -164,59 +165,84 @@ class FoodDonationController extends Controller
      */
     public function update(Request $request, FoodDonation $donation): RedirectResponse
     {
+        // Debug log
+        Log::info('Update method called for donation ID: ' . $donation->id);
+        Log::info('Request data: ', $request->all());
+
         // Only donor and admin can update
         /** @var User $user */
         $user = Auth::user();
         if (Auth::id() !== $donation->donor_id && !$user->isAdmin()) {
-            abort(403);
+            Log::warning('Unauthorized update attempt by user ' . Auth::id() . ' for donation ' . $donation->id);
+            abort(403, 'Unauthorized to update this donation.');
         }
 
-        $validated = $request->validate([
-            'title' => 'required|string|max:255',
-            'description' => 'required|string',
-            'food_type' => 'required|string|max:100',
-            'quantity' => 'required|integer|min:1',
-            'unit' => 'required|string|max:50',
-            'expiry_date' => 'required|date|after:now',
-            'pickup_time_start' => 'required|date|after:now',
-            'pickup_time_end' => 'required|date|after:pickup_time_start',
-            'pickup_location' => 'required|string',
-            'pickup_latitude' => 'required|numeric|between:-90,90',
-            'pickup_longitude' => 'required|numeric|between:-180,180',
-            'is_perishable' => 'boolean',
-            'special_instructions' => 'nullable|string',
-            'images.*' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
-        ]);
+        try {
+            $validated = $request->validate([
+                'title' => 'required|string|max:255',
+                'description' => 'required|string',
+                'food_type' => 'required|string|max:100',
+                'quantity' => 'required|integer|min:1',
+                'unit' => 'required|string|max:50',
+                'expiry_date' => 'required|date',
+                'pickup_time_start' => 'required|date',
+                'pickup_time_end' => 'required|date|after:pickup_time_start',
+                'pickup_location' => 'required|string',
+                'pickup_latitude' => 'required|numeric|between:-90,90',
+                'pickup_longitude' => 'required|numeric|between:-180,180',
+                'is_perishable' => 'boolean',
+                'special_instructions' => 'nullable|string',
+                'images.*' => 'nullable|image|mimes:jpeg,png,jpg|max:2048',
+            ]);
 
-        $donation->update($validated);
-        $donation->is_perishable = $request->has('is_perishable');
+            // Update basic fields
+            $donation->update([
+                'title' => $validated['title'],
+                'description' => $validated['description'],
+                'food_type' => $validated['food_type'],
+                'quantity' => $validated['quantity'],
+                'unit' => $validated['unit'],
+                'expiry_date' => $validated['expiry_date'],
+                'pickup_time_start' => $validated['pickup_time_start'],
+                'pickup_time_end' => $validated['pickup_time_end'],
+                'pickup_location' => $validated['pickup_location'],
+                'pickup_latitude' => $validated['pickup_latitude'],
+                'pickup_longitude' => $validated['pickup_longitude'],
+                'is_perishable' => $request->has('is_perishable'),
+                'special_instructions' => $validated['special_instructions'],
+            ]);
 
-        // Handle new image uploads
-        if ($request->hasFile('images')) {
-            // Delete old images
-            if ($donation->images) {
-                foreach ($donation->images as $imagePath) {
-                    Storage::disk('public')->delete($imagePath);
+            // Handle new image uploads
+            if ($request->hasFile('images')) {
+                // Delete old images
+                if ($donation->images) {
+                    foreach ($donation->images as $imagePath) {
+                        Storage::disk('public')->delete($imagePath);
+                    }
                 }
+
+                $imagePaths = [];
+                foreach ($request->file('images') as $image) {
+                    $path = $image->store('donations', 'public');
+                    $imagePaths[] = $path;
+                }
+                $donation->images = $imagePaths;
+                $donation->save();
             }
 
-            $imagePaths = [];
-            foreach ($request->file('images') as $image) {
-                $path = $image->store('donations', 'public');
-                $imagePaths[] = $path;
-            }
-            $donation->images = $imagePaths;
+            // Broadcast update if approved (temporarily disabled for debug)
+            // if ($donation->status === 'approved') {
+            //     broadcast(new DonationUpdated($donation));
+            // }
+
+            return redirect()->route('donations.show', $donation)
+                ->with('success', 'Donation updated successfully!');
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return back()->withErrors($e->validator)->withInput();
+        } catch (\Exception $e) {
+            return back()->with('error', 'Failed to update donation: ' . $e->getMessage())->withInput();
         }
-
-        $donation->save();
-
-        // Broadcast update if approved
-        if ($donation->status === 'approved') {
-            broadcast(new DonationUpdated($donation));
-        }
-
-        return redirect()->route('donations.show', $donation)
-            ->with('success', 'Donation updated successfully!');
     }
 
     /**
